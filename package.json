@@ -1,0 +1,33 @@
+{
+  "name": "vibe-coding-template",
+  "version": "1.0.0",
+  "description": "AI-powered project generator with modern architecture",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=packages/webapp",
+    "build": "npm run build --workspace=packages/webapp",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present",
+    "install-all": "npm install && npm install --workspaces"
+  },
+  "keywords": [
+    "ai",
+    "code-generation",
+    "project-generator",
+    "claude",
+    "typescript",
+    "python"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
