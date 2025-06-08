@@ -1,28 +1,55 @@
+import { spawn } from 'child_process';
+import { EventEmitter } from 'events';
 import { POST } from '../api/generate-project';
-import { execFile } from 'child_process';
 
 jest.mock('child_process');
-const mocked = execFile as jest.Mock;
+const mockSpawn = spawn as jest.MockedFunction<typeof spawn>;
 
 describe('generate-project endpoint', () => {
   afterEach(() => {
-    mocked.mockReset();
+    mockSpawn.mockReset();
   });
 
   it('returns result on success', async () => {
-    mocked.mockImplementation((c,a,o,cb) => cb(null, 'ok', ''));
+    const mockChild = new EventEmitter() as any;
+    mockChild.stdout = new EventEmitter();
+    mockChild.stderr = new EventEmitter();
+    
+    mockSpawn.mockReturnValue(mockChild);
+    
     const req = { json: async () => ({ name: 'demo' }) } as any;
-    const res = await POST(req as any);
+    const resPromise = POST(req as any);
+    
+    // Simulate successful response
+    setTimeout(() => {
+      mockChild.stdout.emit('data', '{"success": true, "result": {"success": true}}');
+      mockChild.emit('close', 0);
+    }, 10);
+    
+    const res = await resPromise;
     const data = await res.json();
-    expect(data.result).toBe('ok');
+    expect(data.result.success).toBe(true);
   });
 
   it('handles errors', async () => {
-    mocked.mockImplementation((c,a,o,cb) => cb(new Error('fail'), '', ''));
+    const mockChild = new EventEmitter() as any;
+    mockChild.stdout = new EventEmitter();
+    mockChild.stderr = new EventEmitter();
+    
+    mockSpawn.mockReturnValue(mockChild);
+    
     const req = { json: async () => ({}) } as any;
-    const res = await POST(req as any);
+    const resPromise = POST(req as any);
+    
+    // Simulate error
+    setTimeout(() => {
+      mockChild.stderr.emit('data', 'Python execution failed');
+      mockChild.emit('close', 1);
+    }, 10);
+    
+    const res = await resPromise;
     const data = await res.json();
     expect(res.status).toBe(500);
-    expect(data.error).toBe('fail');
+    expect(data.error).toContain('Generation failed');
   });
 });

@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import logging
 import re
-import yaml
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -18,27 +19,27 @@ VARIABLE_PATTERN = re.compile(r"{{\s*([\w\.]+)\s*}}")
 
 class PromptMerger:
     """Handles merging of prompt templates with configuration data."""
-    
-    def __init__(self, base_dir: Optional[Path] = None):
+
+    def __init__(self, base_dir: Optional[Union[str, Path]] = None):
         """Initialize the prompt merger.
-        
+
         Args:
             base_dir: Base directory containing templates and prompts
         """
-        self.base_dir = base_dir or Path.cwd()
-        self.templates_dir = self.base_dir / "templates" 
+        self.base_dir = Path(base_dir) if base_dir else Path.cwd()
+        self.templates_dir = self.base_dir / "templates"
         self.agent_prompts_dir = self.base_dir / "agent_prompts"
-    
+
     def flatten_config(self, data: Any, parent: str = "") -> Dict[str, Any]:
         """Return a flattened representation of data using dot notation.
 
         Supports nested dictionaries and lists. List indices become part of the
         key path, e.g. ``services.0.name``.
-        
+
         Args:
             data: Configuration data to flatten
             parent: Parent key path
-            
+
         Returns:
             Flattened configuration dictionary
         """
@@ -64,19 +65,19 @@ class PromptMerger:
 
     def parse_prompt_meta(self, filepath: Path) -> Tuple[Dict[str, Any], str]:
         """Return metadata dict and content without front matter.
-        
+
         Args:
             filepath: Path to prompt file
-            
+
         Returns:
             Tuple of (metadata, content)
         """
         try:
-            text = filepath.read_text(encoding='utf-8')
+            text = filepath.read_text(encoding="utf-8")
         except Exception as e:
             logger.warning(f"Failed to read prompt file {filepath}: {e}")
             return {}, ""
-            
+
         if text.startswith("---"):
             parts = text.split("---", 2)
             if len(parts) >= 3:
@@ -85,17 +86,19 @@ class PromptMerger:
                     meta = yaml.safe_load(meta_text) or {}
                     return meta, content.lstrip()
                 except yaml.YAMLError as e:
-                    logger.warning(f"Failed to parse YAML frontmatter in {filepath}: {e}")
+                    logger.warning(
+                        f"Failed to parse YAML frontmatter in {filepath}: {e}"
+                    )
                     return {}, text
         return {}, text
 
     def replace_vars(self, text: str, config: Dict[str, Any]) -> str:
         """Replace {{var}} placeholders in text using config.
-        
+
         Args:
             text: Template text with variables
             config: Configuration data
-            
+
         Returns:
             Text with variables replaced
         """
@@ -110,12 +113,12 @@ class PromptMerger:
 
     def _cfg_value(self, cfg: Dict[str, Any], *keys: str, default: str = "") -> str:
         """Return the first present key from cfg.
-        
+
         Args:
             cfg: Configuration dictionary
             keys: Keys to try in order
             default: Default value if no keys found
-            
+
         Returns:
             First found value or default
         """
@@ -124,13 +127,15 @@ class PromptMerger:
                 return str(cfg[k])
         return default
 
-    def should_include_prompt(self, meta: Dict[str, Any], config: Dict[str, Any]) -> bool:
+    def should_include_prompt(
+        self, meta: Dict[str, Any], config: Dict[str, Any]
+    ) -> bool:
         """Determine if prompt should be included based on metadata and config.
-        
+
         Args:
             meta: Prompt metadata
             config: Flattened configuration
-            
+
         Returns:
             True if prompt should be included
         """
@@ -140,36 +145,38 @@ class PromptMerger:
             allowed = [s.lower() for s in meta["stack"]]
             if stack and stack not in allowed:
                 return False
-        
-        # Check auth requirements  
+
+        # Check auth requirements
         auth = self._cfg_value(config, "auth.type", "auth_type", default="none").lower()
         if meta.get("auth_required") and auth == "none":
             return False
-            
+
         # Check database requirements
-        db = self._cfg_value(config, "database.type", "database_type", default="none").lower()
+        db = self._cfg_value(
+            config, "database.type", "database_type", default="none"
+        ).lower()
         if meta.get("database_required") and db == "none":
             return False
-            
+
         return True
 
     def select_prompts(self, prompt_dir: Path, config: Dict[str, Any]) -> List[Path]:
         """Select prompt files to include based on metadata.
-        
+
         Args:
             prompt_dir: Directory containing prompt files
             config: Configuration data
-            
+
         Returns:
             List of selected prompt file paths
         """
         if not prompt_dir.exists():
             logger.warning(f"Prompt directory does not exist: {prompt_dir}")
             return []
-            
+
         selected = []
         flat_config = self.flatten_config(config)
-        
+
         for path in sorted(prompt_dir.glob("*.md")):
             try:
                 meta, _ = self.parse_prompt_meta(path)
@@ -180,16 +187,16 @@ class PromptMerger:
                     logger.debug(f"Skipped prompt: {path.name}")
             except Exception as e:
                 logger.warning(f"Error processing prompt {path}: {e}")
-                
+
         return selected
 
     def merge_prompts(self, prompt_paths: List[Path], config: Dict[str, Any]) -> str:
         """Merge prompt files with variable replacement.
-        
+
         Args:
             prompt_paths: List of prompt file paths
             config: Configuration data
-            
+
         Returns:
             Merged prompt content
         """
@@ -201,20 +208,20 @@ class PromptMerger:
                 sections.append(processed.strip())
             except Exception as e:
                 logger.warning(f"Error processing prompt {path}: {e}")
-                
+
         return "\n\n".join(sections)
 
     def generate_plan(self, config: Dict[str, Any]) -> str:
         """Create a simple generation plan section.
-        
+
         Args:
             config: Configuration data
-            
+
         Returns:
             Generated plan text
         """
         get = lambda *k, d=None: self._cfg_value(config, *k, default=d or "")
-        
+
         steps = [
             "Create the project structure",
             f"Add the ORM and schema for {get('database.type', 'database_type', d='the database')}",
@@ -222,58 +229,60 @@ class PromptMerger:
             f"Integrate authentication using {get('auth.type', 'auth_type', d='the auth system')}",
             "Add CI/CD, tests and monitoring",
         ]
-        
+
         return "\n".join(f"{i+1}. {step}" for i, step in enumerate(steps))
 
     def merge_from_config(self, config: Dict[str, Any]) -> Path:
         """Merge templates using config dict and return the prompt path.
-        
+
         Args:
             config: Configuration dictionary
-            
+
         Returns:
             Path to merged prompt file
         """
         logger.info("Starting prompt merge process")
-        
+
         # Get flattened config for template processing
         cfg_flat = self.flatten_config(config)
-        
+
         # Load master template
         template_path = self.templates_dir / "master_init_template.md"
         if not template_path.exists():
             # Create a basic template if none exists
             template_content = self._create_basic_template()
-            logger.warning(f"Master template not found at {template_path}, using basic template")
+            logger.warning(
+                f"Master template not found at {template_path}, using basic template"
+            )
         else:
-            template_content = template_path.read_text(encoding='utf-8')
-        
+            template_content = template_path.read_text(encoding="utf-8")
+
         # Replace variables in master template
         merged = self.replace_vars(template_content, cfg_flat)
-        
+
         # Add extra prompts from agent_prompts directory
         extra_prompts = self.select_prompts(self.agent_prompts_dir, cfg_flat)
         if extra_prompts:
             logger.info(f"Including {len(extra_prompts)} additional prompts")
             merged_extra = self.merge_prompts(extra_prompts, cfg_flat)
             merged = f"{merged}\n\n{merged_extra}".strip()
-        
+
         # Add generation plan
         plan = self.generate_plan(cfg_flat)
         merged = f"{merged}\n\n## Generation Plan\n\n{plan}".strip()
-        
+
         # Write output
         out_dir = self.base_dir / "build"
         out_dir.mkdir(exist_ok=True)
         out_file = out_dir / "merged_prompt.md"
-        out_file.write_text(merged, encoding='utf-8')
-        
+        out_file.write_text(merged, encoding="utf-8")
+
         logger.info(f"Combined prompt written to {out_file}")
         return out_file
 
     def _create_basic_template(self) -> str:
         """Create a basic template when master template is missing.
-        
+
         Returns:
             Basic template content
         """
@@ -300,10 +309,10 @@ This project will be structured following modern development practices with prop
 
 def create_merger(base_dir: Optional[Path] = None) -> PromptMerger:
     """Create a PromptMerger instance.
-    
+
     Args:
         base_dir: Base directory for templates and prompts
-        
+
     Returns:
         PromptMerger instance
     """

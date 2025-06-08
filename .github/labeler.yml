@@ -1,0 +1,72 @@
+# GitHub Labeler Configuration
+# Automatically applies labels to pull requests based on file paths
+
+# Documentation changes
+documentation:
+  - any: ['docs/**', '*.md', '.github/**']
+
+# Frontend/UI changes  
+frontend:
+  - any: ['packages/webapp/**', '**/*.tsx', '**/*.jsx', '**/*.css', '**/*.scss']
+
+# Backend/Core changes
+backend:
+  - any: ['packages/core/**', '**/*.py', '**/*.pyi']
+
+# API changes
+api:
+  - any: ['packages/webapp/api/**', 'packages/webapp/pages/api/**']
+
+# Configuration changes
+config:
+  - any: ['*.json', '*.yml', '*.yaml', '*.toml', '.env*', 'tsconfig*', 'package*.json']
+
+# Testing changes
+testing:
+  - any: ['**/__tests__/**', '**/*.test.*', '**/*.spec.*', 'jest.config.*', 'vitest.config.*']
+
+# Dependencies
+dependencies:
+  - any: ['package*.json', 'requirements*.txt', 'pyproject.toml', 'poetry.lock', 'yarn.lock']
+
+# CI/CD changes
+ci:
+  - any: ['.github/workflows/**', '.github/actions/**', 'Dockerfile*', 'docker-compose*']
+
+# Bug fixes (based on branch patterns)
+bug:
+  - head-branch: ['^fix/', '^hotfix/', '^bugfix/']
+
+# New features
+feature:
+  - head-branch: ['^feature/', '^feat/']
+
+# Refactoring
+refactor:
+  - head-branch: ['^refactor/', '^refac/']
+
+# Performance improvements
+performance:
+  - head-branch: ['^perf/', '^performance/']
+
+# Security fixes
+security:
+  - head-branch: ['^security/', '^sec/']
+
+# UI/UX improvements
+ui-ux:
+  - any: ['**/*.css', '**/*.scss', 'packages/webapp/components/**']
+  - head-branch: ['^ui/', '^ux/', '^design/']
+
+# AI/ML related changes
+ai-ml:
+  - any: ['packages/core/agent_prompts/**', '**/ai_*', '**/prompt*']
+  - head-branch: ['^ai/', '^ml/', '^prompt/']
+
+# Templates
+templates:
+  - any: ['packages/core/templates/**', '**/template*']
+
+# Breaking changes (based on commit messages or branch patterns)
+breaking-change:
+  - head-branch: ['^breaking/', '^major/']

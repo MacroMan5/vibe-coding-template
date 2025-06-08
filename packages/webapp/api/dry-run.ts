@@ -4,12 +4,11 @@ import path from "path";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const body = await req.json();
-  const repoRoot = path.resolve(__dirname, "..", "..", "..");
+  // Fix: Get the correct repo root (go up from packages/webapp to the monorepo root)
+  const repoRoot = path.resolve(process.cwd(), "..", "..");
   
   // Extract project name from request body, default to "my-project" if not provided
-  const projectName = body.project_name || "my-project";
-  
-  // Create a comprehensive config JSON that matches what the workflow expects
+  const projectName = body.project_name || "my-project";  // Create a comprehensive config JSON that matches what the workflow expects
   const configData = {
     project_name: projectName,
     project_description: body.description || `Generated project: ${projectName}`,
@@ -50,19 +49,25 @@ options = WorkflowOptions(
     verbose=False
 )
 
-# Set the base directory to VIBE-CODING-INIT so it can find templates/
-vibe_init_dir = Path('${repoRoot}') / 'VIBE-CODING-INIT'
-workflow = GenerationWorkflow(base_dir=vibe_init_dir)
+# Set the base directory to core package where templates are located
+core_dir = Path('${repoRoot}') / 'packages' / 'core'
+workflow = GenerationWorkflow(base_dir=core_dir)
 result = workflow.run(options)
 
 # Output the result as JSON
 if result.success and result.output_data:
+    # The output_data contains the structured preview data
     print(json.dumps(result.output_data))
 elif result.success and result.generation_result:
     # Fallback: create preview data from generation result
+    files_data = []
+    if hasattr(result.generation_result, 'files_created') and result.generation_result.files_created:
+        files_data = [{"path": f, "type": "file"} for f in result.generation_result.files_created]
+    
     preview_data = {
-        "steps": result.generation_result.files_created or [],
-        "summary": "Dry run completed successfully"
+        "files": files_data,
+        "estimated_time": result.output_data.get('estimated_time', 0) if result.output_data else 0,
+        "conflicts": result.output_data.get('conflicts', []) if result.output_data else []
     }
     print(json.dumps(preview_data))
 else:

@@ -1,0 +1,88 @@
+name: Pull Request
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate-pr:
+    name: Validate Pull Request
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Validate PR title
+      uses: amannn/action-semantic-pull-request@v5
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        types: |
+          feat
+          fix
+          docs
+          style
+          refactor
+          test
+          chore
+        scopes: |
+          api
+          ui
+          core
+          docs
+          ci
+          
+    - name: Check for breaking changes
+      run: |
+        if [[ "${{ github.event.pull_request.title }}" == *"BREAKING CHANGE"* ]]; then
+          echo "⚠️ This PR contains breaking changes"
+          echo "breaking_change=true" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Add labels based on files changed
+      uses: actions/labeler@v4
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        configuration-path: .github/labeler.yml
+
+  size-check:
+    name: Bundle Size Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build webapp
+      working-directory: packages/webapp
+      run: npm run build
+      
+    - name: Analyze bundle size
+      working-directory: packages/webapp
+      run: |
+        npx next-bundle-analyzer --analyze
+        
+    - name: Comment bundle size
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          const buildDir = path.join('packages/webapp/.next');
+          if (fs.existsSync(buildDir)) {
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '📦 Bundle size analysis completed. Check the build artifacts for details.'
+            });
+          }

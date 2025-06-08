@@ -4,7 +4,8 @@ import path from "path";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const body = await req.json();
-  const repoRoot = path.resolve(__dirname, "..", "..", "..");
+  // Fix: Get the correct repo root (go up from packages/webapp to the monorepo root)
+  const repoRoot = path.resolve(process.cwd(), "..", "..");
   
   // Extract project name from the request
   const projectName = body.project_name || body.name || "generated-project";
@@ -41,16 +42,32 @@ from vibe_core.workflows.generate import GenerationWorkflow, WorkflowOptions
 
 try:
     config_json = '''${JSON.stringify(configData).replace(/'/g, "\\'")}'''
-    options = WorkflowOptions(config_json=config_json, dry_run=False)
+    options = WorkflowOptions(config_json=config_json, dry_run=False, json_output=True)
     
-    # Set base directory to VIBE-CODING-INIT where templates are located
+    # Set base directory to core package where templates are located
     from pathlib import Path
-    vibe_init_dir = Path('${repoRoot}') / 'VIBE-CODING-INIT'
-    workflow = GenerationWorkflow(base_dir=vibe_init_dir)
-    result = workflow.run(options)
+    core_dir = Path('${repoRoot}') / 'packages' / 'core'
+    workflow = GenerationWorkflow(base_dir=core_dir)
     
-    # Output the result as JSON
-    print(json.dumps({"success": True, "result": result}))
+    # Capture stdout to prevent human-readable output from interfering
+    import io
+    import contextlib
+    
+    # Redirect stdout to capture any human-readable output
+    captured_output = io.StringIO()
+    with contextlib.redirect_stdout(captured_output):
+        result = workflow.run(options)
+    
+    # Convert result to JSON-serializable format
+    result_dict = {
+        "success": result.success,
+        "config_used": result.config_used,
+        "merge_result": result.merge_result,
+        "generation_result": result.generation_result.model_dump() if result.generation_result else None,
+        "errors": result.errors,
+        "output_data": result.output_data
+    }
+    print(json.dumps({"success": True, "result": result_dict}))
 except Exception as e:
     print(json.dumps({"success": False, "error": str(e)}), file=sys.stderr)
     sys.exit(1)
